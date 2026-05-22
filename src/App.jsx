@@ -1,47 +1,53 @@
-import React, { useContext, useState, useCallback } from 'react';
+import { useContext, useState, useCallback } from 'react';
 import { DbContext } from './context/DbContext';
 
 // Layout & Shared Components
 import Loader from './components/Loader';
-import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
+import Sidebar from './components/Sidebar';
+import BottomNav from './components/BottomNav';
 import ToastContainer from './components/ToastContainer';
 
 // Modals
-import ApplyModal from './components/Modals/ApplyModal';
-import AddStallModal from './components/Modals/AddStallModal';
-import MaintenanceModal from './components/Modals/MaintenanceModal';
-import AnnouncementModal from './components/Modals/AnnouncementModal';
+import StallDetailModal from './components/Modals/StallDetailModal';
+import ConfirmModal from './components/Modals/ConfirmModal';
 
 // Views — Pre-auth
 import Landing from './views/Landing';
-import Auth from './views/Auth';
+import Login from './views/Login';
+import Register from './views/Register';
 
-// Views — Main App
-import Dashboard from './views/Dashboard';
-import StallsMap from './views/StallsMap';
-import ArNavigation from './views/ArNavigation';
-import View360 from './views/View360';
-import MyStall from './views/MyStall';
-import Applications from './views/Applications';
-import Payments from './views/Payments';
-import Maintenance from './views/Maintenance';
-import Announcements from './views/Announcements';
-import ManageStalls from './views/ManageStalls';
-import Profile from './views/Profile';
-import Support from './views/Support';
+// Views — Renter
+import RenterDashboard from './views/renter/Dashboard';
+import View360 from './views/renter/View360';
+import ArNavigation from './views/renter/ArNavigation';
+import StallDirectory from './views/renter/StallDirectory';
+import StallDetail from './views/renter/StallDetail';
+import InquiryForm from './views/renter/InquiryForm';
+import Applications from './views/renter/Applications';
+import RenterProfile from './views/renter/Profile';
+
+// Views — Contractor
+import ContractorDashboard from './views/contractor/Dashboard';
+import StallManagement from './views/contractor/StallManagement';
+import FloorPlan from './views/contractor/FloorPlan';
+import RentalApplications from './views/contractor/RentalApplications';
+import RenterRecords from './views/contractor/RenterRecords';
+import ContractorProfile from './views/contractor/Profile';
 
 function App() {
   const { currentUser } = useContext(DbContext);
 
-  // Pre-auth screen: 'landing' | 'auth'
+  // Pre-auth screens: 'landing' | 'login' | 'register'
   const [screen, setScreen] = useState('landing');
-  const [authTab, setAuthTab] = useState('login');
 
   // Current page within the main app
   const [currentPage, setCurrentPage] = useState('dashboard');
 
-  // ─── Toast System ───────────────────────────────────────────────────────────
+  // Selected stall for detail/inquiry
+  const [selectedStall, setSelectedStall] = useState(null);
+
+  // ─── Toast System ─────────────────────────────────────────────────────────
   const [toasts, setToasts] = useState([]);
 
   const showToast = useCallback((message, type = 'success') => {
@@ -56,126 +62,144 @@ function App() {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  // ─── Modal State ────────────────────────────────────────────────────────────
-  const [applyModal, setApplyModal] = useState({ open: false, stallId: null });
-  const [addStallModal, setAddStallModal] = useState(false);
-  const [maintenanceModal, setMaintenanceModal] = useState(false);
-  const [announcementModal, setAnnouncementModal] = useState(false);
+  // ─── Modal State ──────────────────────────────────────────────────────────
+  const [stallDetailModal, setStallDetailModal] = useState({ open: false, stall: null });
+  const [confirmModal, setConfirmModal] = useState({ open: false, message: '', onConfirm: null });
 
-  /**
-   * onOpenModal(type, extra?)
-   *   type: 'apply' | 'add-stall' | 'maintenance' | 'announcement'
-   *   extra: stallId string (only for 'apply')
-   */
   const onOpenModal = useCallback((type, extra) => {
-    if (type === 'apply')        setApplyModal({ open: true, stallId: extra });
-    if (type === 'add-stall')    setAddStallModal(true);
-    if (type === 'maintenance')  setMaintenanceModal(true);
-    if (type === 'announcement') setAnnouncementModal(true);
+    if (type === 'stall-detail') setStallDetailModal({ open: true, stall: extra });
+    if (type === 'confirm')      setConfirmModal({ open: true, ...extra });
   }, []);
 
-  // ─── Navigation helpers ─────────────────────────────────────────────────────
-  const handleShowAuth = useCallback((tab = 'login') => {
-    setAuthTab(tab);
-    setScreen('auth');
-  }, []);
+  // ─── Navigation Helpers ───────────────────────────────────────────────────
+  const goToLogin    = useCallback(() => setScreen('login'), []);
+  const goToRegister = useCallback(() => setScreen('register'), []);
+  const goToLanding  = useCallback(() => setScreen('landing'), []);
 
-  const handleBackToLanding = useCallback(() => {
-    setScreen('landing');
-  }, []);
-
-  // ─── Page Renderer ──────────────────────────────────────────────────────────
+  // ─── Page Renderer ────────────────────────────────────────────────────────
   const renderPage = () => {
     const commonProps = { setCurrentPage, showToast };
     const withModal   = { ...commonProps, onOpenModal };
 
+    // Contractor pages
+    if (currentUser?.role === 'contractor') {
+      switch (currentPage) {
+        case 'dashboard':      return <ContractorDashboard {...withModal} />;
+        case 'stall-mgmt':     return <StallManagement {...withModal} />;
+        case 'floor-plan':     return <FloorPlan {...commonProps} />;
+        case 'applications':   return <RentalApplications {...withModal} />;
+        case 'renter-records': return <RenterRecords {...commonProps} />;
+        case 'profile':        return <ContractorProfile {...commonProps} />;
+        default:               return <ContractorDashboard {...withModal} />;
+      }
+    }
+
+    // Renter pages
     switch (currentPage) {
       case 'dashboard':
-        return <Dashboard {...withModal} />;
-      case 'stalls':
-        return (
-          <StallsMap
-            {...commonProps}
-            onOpenApplyModal={(id) => onOpenModal('apply', id)}
-          />
-        );
-      case 'ar':
-        return <ArNavigation {...commonProps} />;
+        return <RenterDashboard {...withModal} />;
       case 'view360':
         return <View360 {...commonProps} />;
-      case 'mystall':
-        return <MyStall {...withModal} />;
+      case 'ar-navigation':
+        return <ArNavigation {...commonProps} />;
+      case 'stall-directory':
+        return (
+          <StallDirectory
+            {...commonProps}
+            onViewStall={(stall) => {
+              setSelectedStall(stall);
+              setCurrentPage('stall-detail');
+            }}
+          />
+        );
+      case 'stall-detail':
+        return (
+          <StallDetail
+            {...commonProps}
+            stall={selectedStall}
+            onSendInquiry={() => setCurrentPage('inquiry-form')}
+          />
+        );
+      case 'inquiry-form':
+        return <InquiryForm {...commonProps} stall={selectedStall} />;
       case 'applications':
         return <Applications {...commonProps} />;
-      case 'payments':
-        return <Payments {...commonProps} />;
-      case 'maintenance':
-        return <Maintenance {...withModal} />;
-      case 'announcements':
-        return <Announcements {...withModal} />;
-      case 'manage-stalls':
-        return <ManageStalls {...withModal} />;
       case 'profile':
-        return <Profile {...commonProps} />;
-      case 'support':
-        return <Support {...commonProps} />;
+        return <RenterProfile {...commonProps} />;
       default:
-        return <Dashboard {...withModal} />;
+        return <RenterDashboard {...withModal} />;
     }
   };
 
-  // ─── Render ─────────────────────────────────────────────────────────────────
+  // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <>
-      {/* ── Loader (auto-hides after 1.6s) ── */}
+      {/* Loader */}
       <Loader />
 
-      {/* ── Global Toasts ── */}
+      {/* Global Toasts */}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
 
-      {/* ── Modals (always mounted, conditionally visible) ── */}
-      <ApplyModal
-        stallId={applyModal.stallId}
-        isOpen={applyModal.open}
-        onClose={() => setApplyModal({ open: false, stallId: null })}
+      {/* Modals */}
+      <StallDetailModal
+        isOpen={stallDetailModal.open}
+        stall={stallDetailModal.stall}
+        onClose={() => setStallDetailModal({ open: false, stall: null })}
         showToast={showToast}
       />
-      <AddStallModal
-        isOpen={addStallModal}
-        onClose={() => setAddStallModal(false)}
-        showToast={showToast}
-      />
-      <MaintenanceModal
-        isOpen={maintenanceModal}
-        onClose={() => setMaintenanceModal(false)}
-        showToast={showToast}
-      />
-      <AnnouncementModal
-        isOpen={announcementModal}
-        onClose={() => setAnnouncementModal(false)}
-        showToast={showToast}
+      <ConfirmModal
+        isOpen={confirmModal.open}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onClose={() => setConfirmModal({ open: false, message: '', onConfirm: null })}
       />
 
-      {/* ── Screen Router ── */}
+      {/* Screen Router */}
       {currentUser ? (
-        // ======== MAIN APP ========
-        <div id="app" className="app-layout" style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-          <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
-          <div className="main-content">
+        // ── MAIN APP ──
+        <div className="flex h-screen overflow-hidden bg-gray-50">
+          {/* Sidebar — desktop only */}
+          <Sidebar
+            currentPage={currentPage}
+            setCurrentPage={setCurrentPage}
+            role={currentUser?.role}
+          />
+
+          {/* Main Content */}
+          <div className="flex flex-col flex-1 overflow-hidden">
             <Topbar currentPage={currentPage} />
-            {renderPage()}
+            <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+              {renderPage()}
+            </main>
           </div>
+
+          {/* Bottom Nav — mobile only */}
+          <BottomNav
+            currentPage={currentPage}
+            setCurrentPage={setCurrentPage}
+            role={currentUser?.role}
+          />
         </div>
-      ) : screen === 'auth' ? (
-        // ======== AUTH SCREEN ========
-        <Auth
-          initialTab={authTab}
-          onBackToLanding={handleBackToLanding}
+      ) : screen === 'login' ? (
+        // ── LOGIN ──
+        <Login
+          onNavigateToRegister={goToRegister}
+          onBackToLanding={goToLanding}
+          showToast={showToast}
+        />
+      ) : screen === 'register' ? (
+        // ── REGISTER ──
+        <Register
+          onNavigateToLogin={goToLogin}
+          onBackToLanding={goToLanding}
           showToast={showToast}
         />
       ) : (
-        // ======== LANDING SCREEN ========
-        <Landing onNavigateToAuth={handleShowAuth} />
+        // ── LANDING ──
+        <Landing
+          onNavigateToLogin={goToLogin}
+          onNavigateToRegister={goToRegister}
+        />
       )}
     </>
   );
